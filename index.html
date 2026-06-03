@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Samsung Pay Web Checkout — Test Store</title>
+  <script src="https://img.mpay.samsung.com/gsmpi/sdk/samsungpay_web_sdk.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #1e1e1e;
+    }
+
+    header {
+      background: #1e1e1e;
+      color: #fff;
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+
+    .cart-badge {
+      background: #23c778;
+      color: #fff;
+      border-radius: 12px;
+      padding: 4px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 32px auto;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 24px;
+    }
+
+    /* ── Products ── */
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 16px;
+    }
+
+    .products {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .product-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #e8e8e8;
+      transition: box-shadow 0.2s;
+    }
+
+    .product-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+
+    .product-emoji { font-size: 36px; margin-bottom: 12px; }
+    .product-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .product-desc { font-size: 12px; color: #888; margin-bottom: 12px; }
+    .product-price { font-size: 18px; font-weight: 700; color: #1e1e1e; margin-bottom: 14px; }
+
+    .btn-add {
+      width: 100%;
+      padding: 10px;
+      background: #1e1e1e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-add:hover { background: #333; }
+    .btn-add.added { background: #23c778; }
+
+    /* ── Cart Panel ── */
+    .cart-panel {
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e8e8e8;
+      padding: 24px;
+      height: fit-content;
+      position: sticky;
+      top: 24px;
+    }
+
+    .cart-items { margin: 16px 0; min-height: 80px; }
+
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+
+    .cart-item:last-child { border-bottom: none; }
+
+    .cart-item-name { font-weight: 500; }
+    .cart-item-qty { color: #888; font-size: 12px; margin-top: 2px; }
+
+    .cart-item-right { display: flex; align-items: center; gap: 10px; }
+    .cart-item-price { font-weight: 600; }
+
+    .btn-remove {
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .btn-remove:hover { color: #ff4444; }
+
+    .cart-empty {
+      text-align: center;
+      color: #bbb;
+      font-size: 13px;
+      padding: 20px 0;
+    }
+
+    .divider { border: none; border-top: 1px solid #e8e8e8; margin: 8px 0; }
+
+    .cart-total {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 16px;
+      padding: 12px 0 16px;
+    }
+
+    /* Samsung Pay Button container */
+    #samsungpay-container { margin-top: 4px; }
+
+    /* Fallback button (shown if SDK not available) */
+    #pay-fallback {
+      display: none;
+      width: 100%;
+      padding: 14px;
+      background: #ccc;
+      color: #666;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: not-allowed;
+      text-align: center;
+    }
+
+    /* ── Config Panel ── */
+    .config-panel {
+      grid-column: 1 / -1;
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e8e8e8;
+      padding: 24px;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .config-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .config-group input, .config-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .config-group input:focus, .config-group select:focus {
+      border-color: #1e1e1e;
+    }
+
+    .config-note {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    /* ── Log Panel ── */
+    .log-panel {
+      grid-column: 1 / -1;
+      background: #1e1e1e;
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+
+    .log-panel .section-title { color: #666; }
+
+    #log-output {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      color: #23c778;
+      min-height: 120px;
+      max-height: 240px;
+      overflow-y: auto;
+      margin-top: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    #log-output .log-info  { color: #23c778; }
+    #log-output .log-error { color: #ff6b6b; }
+    #log-output .log-warn  { color: #ffd93d; }
+    #log-output .log-data  { color: #88c0ff; }
+
+    .btn-clear-log {
+      float: right;
+      background: none;
+      border: 1px solid #444;
+      color: #666;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-top: -4px;
+    }
+
+    .btn-clear-log:hover { color: #aaa; border-color: #666; }
+
+    /* ── Status badge ── */
+    #sdk-status {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+      display: inline-block;
+      margin-bottom: 16px;
+    }
+
+    .status-checking { background: #fff3cd; color: #856404; }
+    .status-ready    { background: #d4edda; color: #155724; }
+    .status-error    { background: #f8d7da; color: #721c24; }
+
+    /* ── Error Modal ── */
+    #error-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 999;
+    }
+
+    #error-modal-box {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+      background: #fff;
+      border-radius: 16px;
+      padding: 32px;
+      width: 420px;
+      max-width: 90vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    #error-modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #1e1e1e;
+    }
+
+    #error-modal-detail {
+      font-size: 14px;
+      color: #444;
+      line-height: 1.6;
+      margin-bottom: 14px;
+      background: #f8f8f8;
+      border-radius: 8px;
+      padding: 12px;
+      word-break: break-word;
+    }
+
+    #error-modal-hint {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.5;
+      margin-bottom: 20px;
+      padding-left: 4px;
+    }
+
+    #error-modal-close {
+      width: 100%;
+      padding: 12px;
+      background: #1e1e1e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #error-modal-close:hover { background: #333; }
+
+    /* ── Wallet Toast ── */
+    #wallet-toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1100;
+      background: #1e1e1e;
+      color: #fff;
+      border-radius: 14px;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      animation: toastIn 0.3s ease;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    #wallet-toast-icon { font-size: 28px; }
+    #wallet-toast-title { font-size: 15px; font-weight: 700; }
+    #wallet-toast-sub   { font-size: 12px; color: #aaa; margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🛒 Samsung Pay Test Store</h1>
+  <span class="cart-badge" onclick="scrollToCart()">Cart: <span id="cart-count">0</span> items</span>
+</header>
+
+<div class="container">
+
+  <!-- ── Config Section ── -->
+  <div class="config-panel">
+    <div class="section-title">⚙️ SDK Configuration</div>
+    <div class="config-grid">
+      <div class="config-group">
+        <label>Service ID (Merchant ID)</label>
+        <input type="text" id="cfg-service-id" value="" placeholder="Enter your Service ID here" />
+      </div>
+      <div class="config-group">
+        <label>Environment</label>
+        <select id="cfg-env">
+          <option value="STAGE">STAGE (Test with device)</option>
+          <option value="STAGE_WITHOUT_APK">STAGE_WITHOUT_APK (Simulated)</option>
+          <option value="PRODUCTION">PRODUCTION (Live)</option>
+        </select>
+      </div>
+      <div class="config-group">
+        <label>Currency</label>
+        <select id="cfg-currency">
+          <option value="USD">USD</option>
+          <option value="KRW">KRW</option>
+          <option value="BRL">BRL</option>
+          <option value="EUR">EUR</option>
+        </select>
+      </div>
+    </div>
+    <p class="config-note">
+      ⚠️ Replace <strong>Service ID</strong> with your actual Merchant ID from the Samsung Pay Partner Portal before testing.
+      Use <strong>STAGE</strong> for real device testing, or <strong>STAGE_WITHOUT_APK</strong> for simulated flow.
+    </p>
+  </div>
+
+  <!-- ── Products ── -->
+  <div>
+    <div class="section-title">Products</div>
+    <div class="products" id="product-list"></div>
+  </div>
+
+  <!-- ── Cart ── -->
+  <div class="cart-panel" id="cart-section">
+    <div class="section-title">Order Summary</div>
+    <span id="sdk-status" class="status-checking">⏳ Checking Samsung Pay...</span>
+
+    <div class="cart-items" id="cart-items">
+      <div class="cart-empty">No items yet</div>
+    </div>
+
+    <hr class="divider" />
+    <div class="cart-total">
+      <span>Total</span>
+      <span id="cart-total">$0.00</span>
+    </div>
+
+    <!-- Samsung Pay SDK button renders here -->
+    <div id="samsungpay-container"></div>
+
+    <!-- Fallback if not available -->
+    <div id="pay-fallback">Samsung Pay Not Available</div>
+  </div>
+
+  <!-- ── Log Panel ── -->
+  <div class="log-panel">
+    <div class="section-title">
+      Console Log
+      <button class="btn-clear-log" onclick="clearLog()">Clear</button>
+    </div>
+    <div id="log-output"></div>
+  </div>
+
+</div>
+
+<script>
+  // ── Product catalog ──────────────────────────────────────────
+  const PRODUCTS = [
+    { id: 1, name: 'Galaxy Buds Pro',    emoji: '🎧', desc: 'Wireless ANC earbuds',   price: 149.99 },
+    { id: 2, name: 'Galaxy Watch 7',     emoji: '⌚', desc: 'Smart fitness tracker',  price: 249.99 },
+    { id: 3, name: 'Samsung T7 SSD',     emoji: '💾', desc: '1TB portable SSD',       price: 89.99  },
+    { id: 4, name: 'Galaxy Tab S9',      emoji: '📱', desc: 'Android tablet 11"',     price: 699.99 },
+  ];
+
+  // ── Cart state ───────────────────────────────────────────────
+  let cart = {};  // { productId: quantity }
+
+  // ── Logger ──────────────────────────────────────────────────
+  function log(msg, type = 'info') {
+    const out = document.getElementById('log-output');
+    const ts  = new Date().toLocaleTimeString();
+    const div = document.createElement('span');
+    div.className = `log-${type}`;
+    div.textContent = `[${ts}] ${msg}\n`;
+    out.appendChild(div);
+    out.scrollTop = out.scrollHeight;
+    console.log(`[${type.toUpperCase()}]`, msg);
+  }
+
+  function clearLog() {
+    document.getElementById('log-output').innerHTML = '';
+  }
+
+  // ── Render products ──────────────────────────────────────────
+  function renderProducts() {
+    const container = document.getElementById('product-list');
+    container.innerHTML = '';
+    PRODUCTS.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'product-card';
+      card.innerHTML = `
+        <div class="product-emoji">${p.emoji}</div>
+        <div class="product-name">${p.name}</div>
+        <div class="product-desc">${p.desc}</div>
+        <div class="product-price">$${p.price.toFixed(2)}</div>
+        <button class="btn-add" id="btn-${p.id}" onclick="addToCart(${p.id})">Add to Cart</button>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  // ── Cart logic ───────────────────────────────────────────────
+  function addToCart(productId) {
+    cart[productId] = (cart[productId] || 0) + 1;
+    log(`Added "${PRODUCTS.find(p => p.id === productId).name}" to cart`);
+
+    // Brief button feedback
+    const btn = document.getElementById(`btn-${productId}`);
+    btn.textContent = '✓ Added';
+    btn.classList.add('added');
+    setTimeout(() => {
+      btn.textContent = 'Add to Cart';
+      btn.classList.remove('added');
+    }, 800);
+
+    renderCart();
+  }
+
+  function removeFromCart(productId) {
+    const product = PRODUCTS.find(p => p.id === productId);
+    log(`Removed "${product.name}" from cart`, 'warn');
+    delete cart[productId];
+    renderCart();
+  }
+
+  function getCartTotal() {
+    return Object.entries(cart).reduce((sum, [id, qty]) => {
+      const product = PRODUCTS.find(p => p.id === parseInt(id));
+      return sum + product.price * qty;
+    }, 0);
+  }
+
+  function renderCart() {
+    const itemsEl  = document.getElementById('cart-items');
+    const totalEl  = document.getElementById('cart-total');
+    const countEl  = document.getElementById('cart-count');
+    const currency = document.getElementById('cfg-currency').value;
+
+    const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
+    countEl.textContent = totalItems;
+
+    if (totalItems === 0) {
+      itemsEl.innerHTML = '<div class="cart-empty">No items yet</div>';
+      totalEl.textContent = formatCurrency(0, currency);
+      return;
+    }
+
+    itemsEl.innerHTML = '';
+    Object.entries(cart).forEach(([id, qty]) => {
+      const product = PRODUCTS.find(p => p.id === parseInt(id));
+      const subtotal = product.price * qty;
+      const item = document.createElement('div');
+      item.className = 'cart-item';
+      item.innerHTML = `
+        <div>
+          <div class="cart-item-name">${product.emoji} ${product.name}</div>
+          <div class="cart-item-qty">Qty: ${qty}</div>
+        </div>
+        <div class="cart-item-right">
+          <span class="cart-item-price">${formatCurrency(subtotal, currency)}</span>
+          <button class="btn-remove" onclick="removeFromCart(${id})" title="Remove">✕</button>
+        </div>
+      `;
+      itemsEl.appendChild(item);
+    });
+
+    totalEl.textContent = formatCurrency(getCartTotal(), currency);
+  }
+
+  function formatCurrency(amount, currency = 'USD') {
+    const symbols = { USD: '$', KRW: '₩', BRL: 'R$', EUR: '€' };
+    const symbol = symbols[currency] || currency + ' ';
+    return currency === 'KRW'
+      ? symbol + Math.round(amount).toLocaleString()
+      : symbol + amount.toFixed(2);
+  }
+
+  function scrollToCart() {
+    document.getElementById('cart-section').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ── Samsung Pay SDK ──────────────────────────────────────────
+  let samsungPayClient = null;
+
+  function getConfig() {
+    return {
+      serviceId: document.getElementById('cfg-service-id').value.trim(),
+      environment: document.getElementById('cfg-env').value,
+      currency: document.getElementById('cfg-currency').value,
+    };
+  }
+
+  function buildPaymentMethods() {
+    const { serviceId } = getConfig();
+    return {
+      version: '2',
+      serviceId: 'd5f10906fb1742b7957924',
+      protocol: 'PROTOCOL_3DS',
+      allowedBrands: ['visa', 'mastercard', 'amex', 'discover'],
+    };
+  }
+
+  function buildTransactionDetail() {
+    const { currency } = getConfig();
+    const total = getCartTotal();
+    const orderNumber = 'TEST-' + Date.now();
+    return {
+      orderNumber: orderNumber,
+      merchant: {
+        name: 'Samsung Pay Test Store',
+        url: window.location.hostname || 'localhost',
+        id: 'test-merchant-id',
+        countryCode: 'US',
+      },
+      amount: {
+        option: 'FORMAT_TOTAL_ESTIMATED_AMOUNT',
+        currency: currency,
+        total: Math.round(total * 100) / 100,  // 2 decimal places
+      },
+    };
+  }
+
+  function setStatus(text, type) {
+    const el = document.getElementById('sdk-status');
+    el.textContent = text;
+    el.className = `status-${type}`;
+  }
+
+  function initSamsungPay() {
+    try {
+      if (typeof SamsungPay === 'undefined') {
+        throw new Error('SamsungPay SDK script not loaded');
+      }
+
+      const { environment } = getConfig();
+      log(`Initializing SDK — environment: ${environment}`);
+
+      samsungPayClient = new SamsungPay.PaymentClient({ environment: "STAGE_WITHOUT_APK" });
+      const paymentMethods = buildPaymentMethods();
+
+      samsungPayClient.isReadyToPay(paymentMethods)
+        .then(function(response) {
+          log(`isReadyToPay response: ${JSON.stringify(response)}`, 'data');
+          if (response.result) {
+            setStatus('✅ Samsung Pay Ready', 'ready');
+            log('Samsung Pay is available — rendering button');
+            createSamsungPayButton();
+          } else {
+            setStatus('⚠️ Samsung Pay Not Available', 'error');
+            log('Samsung Pay not available on this device/browser', 'warn');
+            document.getElementById('pay-fallback').style.display = 'block';
+          }
+        })
+        .catch(function(err) {
+          setStatus('❌ SDK Error', 'error');
+          log(`isReadyToPay error: ${err.message || JSON.stringify(err)}`, 'error');
+          document.getElementById('pay-fallback').style.display = 'block';
+        });
+
+    } catch (e) {
+      setStatus('❌ SDK Not Loaded', 'error');
+      log(`SDK init failed: ${e.message}`, 'error');
+      document.getElementById('pay-fallback').style.display = 'block';
+    }
+  }
+
+  function createSamsungPayButton() {
+    const container = document.getElementById('samsungpay-container');
+    container.innerHTML = '';
+
+    const button = samsungPayClient.createButton({
+      onClick: onSamsungPayClicked,
+      buttonStyle: 'black',
+      type: 'buy',
+    });
+
+    container.appendChild(button);
+    log('Samsung Pay button rendered');
+  }
+
+  function onSamsungPayClicked() {
+    const total = getCartTotal();
+
+    if (total <= 0) {
+      log('Cart is empty — add items before paying', 'warn');
+      alert('Please add items to your cart first.');
+      return;
+    }
+
+    const paymentMethods   = buildPaymentMethods();
+    const transactionDetail = buildTransactionDetail();
+
+    log(`Launching payment sheet — Order: ${transactionDetail.orderNumber}, Total: ${total}`, 'info');
+    log(`transactionDetail: ${JSON.stringify(transactionDetail)}`, 'data');
+
+    showWalletToast();
+
+    samsungPayClient.loadPaymentSheet(paymentMethods, transactionDetail)
+      .then(function(paymentCredential) {
+        dismissWalletToast();
+        log('✅ Payment credential received!', 'info');
+        log(`paymentCredential: ${JSON.stringify(paymentCredential)}`, 'data');
+
+        // TODO: Send paymentCredential to your backend / payment processor here
+        // The encrypted 3DS.data needs to be decrypted using your private key
+
+        const paymentResult = {
+          status: 'CHARGED',
+          provider: 'Test PG',
+        };
+
+        samsungPayClient.notify(paymentResult);
+        log(`notify() called with status: ${paymentResult.status}`, 'info');
+
+        alert(`✅ Payment successful!\nOrder: ${transactionDetail.orderNumber}\nCard: ${paymentCredential.card_brand} ****${paymentCredential.card_last4digits}`);
+
+        // Reset cart after successful payment
+        cart = {};
+        renderCart();
+      })
+      .catch(function(error) {
+        dismissWalletToast();
+        log(`Payment error: ${error.message || JSON.stringify(error)}`, 'error');
+
+        const paymentResult = {
+          status: 'CANCELED',
+          provider: 'Test PG',
+        };
+        if (samsungPayClient) samsungPayClient.notify(paymentResult);
+
+        // Parse the error into a human-readable message
+        const errMsg = parsePaymentError(error);
+        showErrorModal(errMsg.title, errMsg.detail, errMsg.hint);
+      });
+  }
+
+  function showWalletToast() {
+    const existing = document.getElementById('wallet-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'wallet-toast';
+    toast.innerHTML = `
+      <span id="wallet-toast-icon">📱</span>
+      <div>
+        <div id="wallet-toast-title">Check your Samsung Wallet</div>
+        <div id="wallet-toast-sub">Approve the payment on your device</div>
+      </div>
+    `;
+    document.body.appendChild(toast);
+
+    // Auto-dismiss when payment resolves (success or error)
+    // also auto-dismiss after 30s as a safety fallback
+    setTimeout(dismissWalletToast, 30000);
+  }
+
+  function dismissWalletToast() {
+    const toast = document.getElementById('wallet-toast');
+    if (toast) {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(16px)';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }
+
+  // ── Error handling ───────────────────────────────────────────
+
+  // Maps known Samsung Pay error codes / messages to friendly descriptions
+  function parsePaymentError(error) {
+    const raw = (error.message || error.errorCode || JSON.stringify(error) || '').toString();
+    const code = (error.errorCode || error.code || '').toString().toUpperCase();
+
+    log(`Raw error object: ${JSON.stringify(error)}`, 'data');
+
+    // User-cancelled — not really an error, handle softly
+    if (/cancel/i.test(raw) || code === 'CANCELED' || code === 'USER_CANCELED') {
+      return {
+        title: '🚫 Payment Cancelled',
+        detail: 'You cancelled the payment. No charge was made.',
+        hint: 'You can try again whenever you\'re ready.',
+      };
+    }
+
+    // Service ID / Merchant ID issues
+    if (/serviceId|service_id|merchant|invalid.*id|not.*registered/i.test(raw)) {
+      return {
+        title: '⚙️ Invalid Service ID',
+        detail: `The Service ID "${document.getElementById('cfg-service-id').value}" is not recognized by Samsung Pay.`,
+        hint: 'Replace it with your actual Merchant ID from the Samsung Pay Partner Portal.',
+      };
+    }
+
+    // Network / connectivity
+    if (/network|timeout|fetch|connection|offline/i.test(raw)) {
+      return {
+        title: '🌐 Network Error',
+        detail: 'Could not connect to the Samsung Pay server.',
+        hint: 'Check your internet connection and try again.',
+      };
+    }
+
+    // Samsung Wallet app not installed / not found on device
+    if (/not.*install|no.*app|wallet.*not|apk/i.test(raw)) {
+      return {
+        title: '📱 Samsung Wallet Not Found',
+        detail: 'Samsung Wallet app is not installed or not responding on the paired device.',
+        hint: 'Install Samsung Wallet from the Galaxy Store, then try again.',
+      };
+    }
+
+    // Device binding / QR timeout
+    if (/timeout|expired|qr/i.test(raw)) {
+      return {
+        title: '⏱️ Session Timed Out',
+        detail: 'The payment session expired before the device was confirmed.',
+        hint: 'Please start the payment again and complete the QR scan or email binding within 5 minutes.',
+      };
+    }
+
+    // STAGE_WITHOUT_APK specific
+    if (/stage|without.*apk|simulation/i.test(raw)) {
+      return {
+        title: '🧪 Simulation Mode Error',
+        detail: `Error in STAGE_WITHOUT_APK environment: ${raw}`,
+        hint: 'Ensure you are using valid test credentials for the simulated environment.',
+      };
+    }
+
+    // Generic / unknown
+    return {
+      title: '❌ Payment Failed',
+      detail: raw || 'An unexpected error occurred during the payment process.',
+      hint: 'Check the Console Log below for the full error details, or contact Samsung Pay support.',
+    };
+  }
+
+  function showErrorModal(title, detail, hint) {
+    // Remove any existing modal
+    const existing = document.getElementById('error-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'error-modal';
+    modal.innerHTML = `
+      <div id="error-modal-backdrop"></div>
+      <div id="error-modal-box">
+        <div id="error-modal-title">${title}</div>
+        <div id="error-modal-detail">${detail}</div>
+        <div id="error-modal-hint">💡 ${hint}</div>
+        <button id="error-modal-close" onclick="closeErrorModal()">Got it</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  function closeErrorModal() {
+    const modal = document.getElementById('error-modal');
+    if (modal) modal.remove();
+  }
+
+  // ── Init ─────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', function() {
+    renderProducts();
+    renderCart();
+    log('Page loaded — initializing Samsung Pay SDK...');
+    initSamsungPay();
+
+    // Re-init when config fields change
+    ['cfg-env', 'cfg-currency'].forEach(id => {
+      document.getElementById(id).addEventListener('change', function() {
+        log('Config changed — re-initializing SDK...');
+        initSamsungPay();
+        renderCart();
+      });
+    });
+  });
+</script>
+</body>
+</html>
