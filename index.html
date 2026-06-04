@@ -624,7 +624,7 @@
       const { environment } = getConfig();
       log(`Initializing SDK — environment: ${environment}`);
 
-      samsungPayClient = new SamsungPay.PaymentClient({ environment: "STAGE_WITHOUT_APK" });
+      samsungPayClient = new SamsungPay.PaymentClient({ environment: environment });
       const paymentMethods = buildPaymentMethods();
 
       samsungPayClient.isReadyToPay(paymentMethods)
