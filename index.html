@@ -598,7 +598,7 @@
       merchant: {
         name: 'Samsung Pay Test Store',
         url: window.location.hostname || 'localhost',
-        id: 'test-merchant-id',
+        id: document.getElementById('cfg-service-id').value.trim(),
         countryCode: 'US',
       },
       amount: {
