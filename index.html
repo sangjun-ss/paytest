@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Samsung Pay Web Checkout — Test Store</title>
   <script src="https://img.mpay.samsung.com/gsmpi/sdk/samsungpay_web_sdk.js"></script>
+  <script src="https://pay.google.com/gp/p/js/pay.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -403,6 +404,31 @@
     </p>
   </div>
 
+  <!-- ── Google Pay Config ── -->
+  <div class="config-panel">
+    <div class="section-title">🔵 Google Pay Configuration</div>
+    <div class="config-grid">
+      <div class="config-group">
+        <label>Merchant ID</label>
+        <input type="text" id="gpay-merchant-id" value="" placeholder="Enter Google Merchant ID" />
+      </div>
+      <div class="config-group">
+        <label>Merchant Name</label>
+        <input type="text" id="gpay-merchant-name" value="Samsung Pay Test Store" />
+      </div>
+      <div class="config-group">
+        <label>Environment</label>
+        <select id="gpay-env">
+          <option value="TEST">TEST (No real charges)</option>
+          <option value="PRODUCTION">PRODUCTION (Live)</option>
+        </select>
+      </div>
+    </div>
+    <p class="config-note">
+      ⚠️ In <strong>TEST</strong> mode, no real charges occur. Switch to <strong>PRODUCTION</strong> and enter your Merchant ID for live testing.
+    </p>
+  </div>
+
   <!-- ── Products ── -->
   <div>
     <div class="section-title">Products</div>
@@ -426,6 +452,9 @@
 
     <!-- Samsung Pay SDK button renders here -->
     <div id="samsungpay-container"></div>
+
+    <!-- Google Pay button renders here -->
+    <div id="googlepay-container" style="margin-top: 10px;"></div>
 
     <!-- Fallback if not available -->
     <div id="pay-fallback">Samsung Pay Not Available</div>
@@ -752,6 +781,154 @@
     }
   }
 
+  // ── Google Pay ───────────────────────────────────────────────
+
+  let googlePayClient = null;
+
+  function getGPayConfig() {
+    return {
+      merchantId:   document.getElementById('gpay-merchant-id').value.trim(),
+      merchantName: document.getElementById('gpay-merchant-name').value.trim(),
+      environment:  document.getElementById('gpay-env').value,
+      currency:     document.getElementById('cfg-currency').value,
+    };
+  }
+
+  function buildGPayPaymentRequest() {
+    const { merchantId, merchantName, currency } = getGPayConfig();
+    const total = getCartTotal();
+    return {
+      apiVersion: 2,
+      apiVersionMinor: 0,
+      allowedPaymentMethods: [{
+        type: 'CARD',
+        parameters: {
+          allowedAuthMethods:  ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+          allowedCardNetworks: ['AMEX', 'DISCOVER', 'MASTERCARD', 'VISA'],
+        },
+        tokenizationSpecification: {
+          type: 'PAYMENT_GATEWAY',
+          parameters: {
+            gateway:           'example',  // replace with your PG
+            gatewayMerchantId: merchantId || 'exampleGatewayMerchantId',
+          },
+        },
+      }],
+      merchantInfo: {
+        merchantId:   merchantId   || '01234567890123456789',
+        merchantName: merchantName || 'Samsung Pay Test Store',
+      },
+      transactionInfo: {
+        totalPriceStatus: 'FINAL',
+        totalPrice:       total.toFixed(2),
+        currencyCode:     currency,
+        countryCode:      'US',
+      },
+    };
+  }
+
+  function initGooglePay() {
+    try {
+      if (typeof google === 'undefined' || !google.payments) {
+        log('Google Pay SDK not loaded', 'warn');
+        return;
+      }
+
+      const { environment } = getGPayConfig();
+      log(`Initializing Google Pay — environment: ${environment}`);
+
+      googlePayClient = new google.payments.api.PaymentsClient({ environment });
+
+      const isReadyRequest = {
+        apiVersion: 2,
+        apiVersionMinor: 0,
+        allowedPaymentMethods: [{
+          type: 'CARD',
+          parameters: {
+            allowedAuthMethods:  ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+            allowedCardNetworks: ['AMEX', 'DISCOVER', 'MASTERCARD', 'VISA'],
+          },
+        }],
+      };
+
+      googlePayClient.isReadyToPay(isReadyRequest)
+        .then(function(response) {
+          log(`Google Pay isReadyToPay: ${JSON.stringify(response)}`, 'data');
+          if (response.result) {
+            log('Google Pay is available — rendering button');
+            createGooglePayButton();
+          } else {
+            log('Google Pay not available on this device/browser', 'warn');
+          }
+        })
+        .catch(function(err) {
+          log(`Google Pay isReadyToPay error: ${err.message || JSON.stringify(err)}`, 'error');
+        });
+
+    } catch (e) {
+      log(`Google Pay init failed: ${e.message}`, 'error');
+    }
+  }
+
+  function createGooglePayButton() {
+    const container = document.getElementById('googlepay-container');
+    container.innerHTML = '';
+
+    const button = googlePayClient.createButton({
+      onClick:      onGooglePayClicked,
+      buttonType:   'buy',
+      buttonColor:  'default',
+      buttonLocale: 'en',
+    });
+
+    container.appendChild(button);
+    log('Google Pay button rendered');
+  }
+
+  function onGooglePayClicked() {
+    const total = getCartTotal();
+
+    if (total <= 0) {
+      log('Cart is empty — add items before paying', 'warn');
+      alert('Please add items to your cart first.');
+      return;
+    }
+
+    const paymentRequest = buildGPayPaymentRequest();
+    log(`Launching Google Pay sheet — Total: ${total}`, 'info');
+    log(`paymentRequest: ${JSON.stringify(paymentRequest)}`, 'data');
+
+    showWalletToast();
+
+    googlePayClient.loadPaymentData(paymentRequest)
+      .then(function(paymentData) {
+        dismissWalletToast();
+        log('✅ Google Pay payment data received!', 'info');
+        log(`paymentData: ${JSON.stringify(paymentData)}`, 'data');
+
+        // TODO: Send paymentData.paymentMethodData.tokenizationData.token
+        // to your backend / payment processor here
+
+        alert(`✅ Google Pay successful!\nCard: ${paymentData.paymentMethodData.description}`);
+
+        cart = {};
+        renderCart();
+      })
+      .catch(function(error) {
+        dismissWalletToast();
+        if (error.statusCode === 'CANCELED') {
+          log('Google Pay cancelled by user', 'warn');
+        } else {
+          log(`Google Pay error: ${error.statusMessage || JSON.stringify(error)}`, 'error');
+          showErrorModal(
+            '❌ Google Pay Failed',
+            error.statusMessage || JSON.stringify(error),
+            'Check the Console Log for details.'
+          );
+        }
+      });
+  }
+
   // ── Error handling ───────────────────────────────────────────
 
   // Maps known Samsung Pay error codes / messages to friendly descriptions
@@ -853,13 +1030,21 @@
     renderCart();
     log('Page loaded — initializing Samsung Pay SDK...');
     initSamsungPay();
+    initGooglePay();
 
     // Re-init when config fields change
     ['cfg-env', 'cfg-currency'].forEach(id => {
       document.getElementById(id).addEventListener('change', function() {
-        log('Config changed — re-initializing SDK...');
+        log('Config changed — re-initializing Samsung Pay SDK...');
         initSamsungPay();
         renderCart();
+      });
+    });
+
+    ['gpay-env', 'gpay-merchant-id'].forEach(id => {
+      document.getElementById(id).addEventListener('change', function() {
+        log('Google Pay config changed — re-initializing...');
+        initGooglePay();
       });
     });
   });
