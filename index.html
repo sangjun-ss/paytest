@@ -6,6 +6,7 @@
   <title>Samsung Pay Web Checkout — Test Store</title>
   <script src="https://img.mpay.samsung.com/gsmpi/sdk/samsungpay_web_sdk.js"></script>
   <script src="https://pay.google.com/gp/p/js/pay.js"></script>
+  <script src="https://js.stripe.com/v3/"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -334,6 +335,45 @@
 
     #error-modal-close:hover { background: #333; }
 
+    /* ── Stripe ── */
+    #stripe-container { margin-top: 10px; }
+
+    #stripe-card-element {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+      margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+
+    #stripe-card-element.StripeElement--focus { border-color: #635bff; }
+    #stripe-card-element.StripeElement--invalid { border-color: #df1b41; }
+
+    #stripe-error {
+      color: #df1b41;
+      font-size: 12px;
+      margin-bottom: 8px;
+      min-height: 16px;
+    }
+
+    .btn-stripe {
+      width: 100%;
+      padding: 14px;
+      background: #635bff;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 4px;
+    }
+
+    .btn-stripe:hover { background: #4f46e5; }
+    .btn-stripe:disabled { background: #aaa; cursor: not-allowed; }
+
     /* ── Wallet Toast ── */
     #wallet-toast {
       position: fixed;
@@ -406,6 +446,16 @@
 
   <!-- ── Google Pay Config ── -->
   <div class="config-panel">
+    <div class="section-title">🟣 Stripe Configuration</div>
+    <div class="config-grid">
+      <div class="config-group" style="grid-column: 1 / -1;">
+        <label>Publishable Key</label>
+        <input type="text" id="stripe-pub-key" value="pk_test_51TlCBZ3fiQ1CZ0ElTXaHE88dhRkw2nELje7BoIPPxeYFTdQjs5B0pjIQLevpvkFx25p3NZelyweVFKAQOU8jaRSD00SquTAV41" placeholder="pk_test_..." />
+      </div>
+    </div>
+    <p class="config-note">⚠️ Test mode — use Stripe test card <strong>4242 4242 4242 4242</strong>, any future expiry, any CVC.</p>
+  </div>
+  <div class="config-panel">
     <div class="section-title">🔵 Google Pay Configuration</div>
     <div class="config-grid">
       <div class="config-group">
@@ -455,6 +505,15 @@
 
     <!-- Google Pay button renders here -->
     <div id="googlepay-container" style="margin-top: 10px;"></div>
+
+    <!-- Stripe card element renders here -->
+    <div id="stripe-container" style="display:none; margin-top: 10px;">
+      <div id="stripe-card-element"></div>
+      <div id="stripe-error"></div>
+      <button class="btn-stripe" id="stripe-pay-btn" onclick="stripeCheckout()">
+        Pay with Card (Stripe)
+      </button>
+    </div>
 
     <!-- Fallback if not available -->
     <div id="pay-fallback">Samsung Pay Not Available</div>
@@ -1031,6 +1090,7 @@
     log('Page loaded — initializing Samsung Pay SDK...');
     initSamsungPay();
     initGooglePay();
+    initStripe();
 
     // Re-init when config fields change
     ['cfg-env', 'cfg-currency'].forEach(id => {
@@ -1047,7 +1107,94 @@
         initGooglePay();
       });
     });
+
+    document.getElementById('stripe-pub-key').addEventListener('change', function() {
+      log('Stripe config changed — re-initializing...');
+      initStripe();
+    });
   });
+
+  // ── Stripe ───────────────────────────────────────────────────
+  let stripe = null;
+  let stripeCard = null;
+
+  function initStripe() {
+    const pubKey = document.getElementById('stripe-pub-key').value.trim();
+    if (!pubKey || !pubKey.startsWith('pk_')) {
+      log('Stripe: invalid Publishable Key', 'warn');
+      return;
+    }
+
+    try {
+      stripe = Stripe(pubKey);
+      const elements = stripe.elements();
+      stripeCard = elements.create('card', {
+        style: {
+          base: {
+            fontSize: '14px',
+            color: '#1e1e1e',
+            fontFamily: '"Segoe UI", sans-serif',
+            '::placeholder': { color: '#aaa' },
+          },
+          invalid: { color: '#df1b41' },
+        }
+      });
+
+      const container = document.getElementById('stripe-card-element');
+      container.innerHTML = '';
+      stripeCard.mount('#stripe-card-element');
+
+      stripeCard.on('change', function(event) {
+        document.getElementById('stripe-error').textContent = event.error ? event.error.message : '';
+      });
+
+      document.getElementById('stripe-container').style.display = 'block';
+      log('Stripe initialized ✓', 'info');
+    } catch (e) {
+      log('Stripe init error: ' + e.message, 'error');
+    }
+  }
+
+  async function stripeCheckout() {
+    if (!stripe || !stripeCard) {
+      log('Stripe not initialized', 'error');
+      return;
+    }
+
+    const total = getCartTotal();
+    if (total <= 0) {
+      log('Cart is empty', 'warn');
+      return;
+    }
+
+    const btn = document.getElementById('stripe-pay-btn');
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    log(`Stripe: creating payment method for $${total.toFixed(2)}...`);
+
+    const { paymentMethod, error } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: stripeCard,
+    });
+
+    if (error) {
+      log('Stripe error: ' + error.message, 'error');
+      document.getElementById('stripe-error').textContent = error.message;
+      btn.disabled = false;
+      btn.textContent = 'Pay with Card (Stripe)';
+      return;
+    }
+
+    log('Stripe: Payment Method created ✓', 'info');
+    log('Payment Method ID: ' + paymentMethod.id, 'data');
+    log('Card brand: ' + paymentMethod.card.brand + ' •••• ' + paymentMethod.card.last4, 'data');
+    log('⚠️ Note: Full charge requires backend (PaymentIntent). Frontend test complete!', 'warn');
+
+    showToast('💳', 'Stripe Test Complete', 'Payment method created — ' + paymentMethod.card.brand + ' •••• ' + paymentMethod.card.last4);
+
+    btn.disabled = false;
+    btn.textContent = 'Pay with Card (Stripe)';
+  }
 </script>
 </body>
 </html>
