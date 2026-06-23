@@ -811,6 +811,23 @@
       });
   }
 
+  function showToast(icon, title, sub) {
+    const existing = document.getElementById('wallet-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'wallet-toast';
+    toast.innerHTML = `
+      <span id="wallet-toast-icon">${icon}</span>
+      <div>
+        <div id="wallet-toast-title">${title}</div>
+        <div id="wallet-toast-sub">${sub}</div>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => dismissWalletToast(), 4000);
+  }
+
   function showWalletToast() {
     const existing = document.getElementById('wallet-toast');
     if (existing) existing.remove();
