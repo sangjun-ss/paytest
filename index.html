@@ -1188,25 +1188,59 @@
     btn.textContent = 'Processing...';
     log(`Stripe: creating payment method for $${total.toFixed(2)}...`);
 
-    const { paymentMethod, error } = await stripe.createPaymentMethod({
+    // Step 1: Create Payment Method
+    const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
       type: 'card',
       card: stripeCard,
     });
 
-    if (error) {
-      log('Stripe error: ' + error.message, 'error');
-      document.getElementById('stripe-error').textContent = error.message;
+    if (pmError) {
+      log('Stripe error: ' + pmError.message, 'error');
+      document.getElementById('stripe-error').textContent = pmError.message;
       btn.disabled = false;
       btn.textContent = 'Pay with Card (Stripe)';
       return;
     }
 
-    log('Stripe: Payment Method created ✓', 'info');
-    log('Payment Method ID: ' + paymentMethod.id, 'data');
-    log('Card brand: ' + paymentMethod.card.brand + ' •••• ' + paymentMethod.card.last4, 'data');
-    log('⚠️ Note: Full charge requires backend (PaymentIntent). Frontend test complete!', 'warn');
+    log('Payment Method created ✓ — ID: ' + paymentMethod.id, 'info');
+    log('Card: ' + paymentMethod.card.brand + ' •••• ' + paymentMethod.card.last4, 'data');
 
-    showToast('💳', 'Stripe Test Complete', 'Payment method created — ' + paymentMethod.card.brand + ' •••• ' + paymentMethod.card.last4);
+    // Step 2: Create PaymentIntent via local server
+    log('Sending to server for PaymentIntent creation...', 'info');
+    try {
+      const response = await fetch('http://localhost:3000/api/stripe/create-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: total,
+          currency: document.getElementById('cfg-currency').value.toLowerCase(),
+          paymentMethodId: paymentMethod.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      log('PaymentIntent created ✓ — ID: ' + result.id, 'info');
+      log('Status: ' + result.status, 'data');
+
+      if (result.status === 'succeeded') {
+        log('✅ Payment succeeded!', 'info');
+        showToast('💳', 'Stripe Payment Complete', paymentMethod.card.brand + ' •••• ' + paymentMethod.card.last4);
+        cart = {};
+        renderCart();
+      } else {
+        log('Payment status: ' + result.status, 'warn');
+      }
+
+    } catch (err) {
+      log('Server error: ' + err.message, 'error');
+      log('⚠️ Make sure local server is running at localhost:3000', 'warn');
+      document.getElementById('stripe-error').textContent = 'Server error: ' + err.message;
+    }
 
     btn.disabled = false;
     btn.textContent = 'Pay with Card (Stripe)';
