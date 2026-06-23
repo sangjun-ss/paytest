@@ -859,6 +859,7 @@
     return {
       apiVersion: 2,
       apiVersionMinor: 0,
+      callbackIntents: ['PAYMENT_AUTHORIZATION'],
       allowedPaymentMethods: [{
         type: 'CARD',
         parameters: {
@@ -896,7 +897,22 @@
       const { environment } = getGPayConfig();
       log(`Initializing Google Pay — environment: ${environment}`);
 
-      googlePayClient = new google.payments.api.PaymentsClient({ environment });
+      googlePayClient = new google.payments.api.PaymentsClient({
+        environment,
+        paymentDataCallbacks: {
+          onPaymentAuthorized: function(paymentData) {
+            return new Promise(function(resolve, reject) {
+              log('✅ Google Pay onPaymentAuthorized called', 'info');
+              log('Card: ' + paymentData.paymentMethodData.description, 'data');
+              log('Token: ' + JSON.stringify(paymentData.paymentMethodData.tokenizationData), 'data');
+              showToast('🟢', 'Google Pay Authorized', paymentData.paymentMethodData.description);
+              cart = {};
+              renderCart();
+              resolve({ transactionState: 'SUCCESS' });
+            });
+          }
+        }
+      });
 
       const isReadyRequest = {
         apiVersion: 2,
